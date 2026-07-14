@@ -1,0 +1,1173 @@
+
+      
+    const { useState, useEffect, useRef, useCallback } = React;
+
+    const SAFE_URLS = {
+      LUNG: "https://lh3.googleusercontent.com/d/1Z_GZ8Q86IEDU2MDTLvhlzMsuIQNyWvVt",
+      LOGO: "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTrhL3xnldt1ITc_5SVjgNo0unLO8cHC9KI8g&s"
+    };
+
+    
+    const FALLBACK_GAME_CONFIG = {
+      initialLives: 3, 
+      sequentialCanvases: { min: 1, max: 3 }, 
+      concentricRings: { min: 1, max: 3 }, 
+      speed: { min: 2.0, max: 8.0 }, 
+      targetSize: { min: 40, max: 80 }, 
+      greatSize: { min: 4, max: 8 }, 
+      scoreEntryMode: 'EMPID', 
+      showLungOverlay: true, 
+      animateLungBreathe: true, 
+      isGameActive: true, 
+      campaignName: "Modo Local", 
+      campaignError: null
+    };
+
+    const FALLBACK_TRIVIA_CATALOG = [{ 
+      title: "Sistemas Críticos", 
+      desc: "Bienvenido al simulador.", 
+      img: "https://placehold.co/600x300/10b981/050505?text=PROMO+AQUI" 
+    }];
+
+    let GAME_CONFIG; 
+    let TRIVIA_CATALOG = [];
+    
+    const CURRENT_GAME = "AJUSTE_CRITICO";
+    
+    try { 
+      const configEl = document.getElementById('server-config');
+      if (configEl && configEl.textContent && !configEl.textContent.includes('SERVER_CONFIG')) { 
+        GAME_CONFIG = JSON.parse(configEl.textContent); 
+      } else { 
+        throw new Error("Modo local"); 
+      } 
+    } catch(e) { 
+      GAME_CONFIG = FALLBACK_GAME_CONFIG; 
+    }
+
+    try { 
+      const triviaEl = document.getElementById('server-trivia');
+      if (triviaEl && triviaEl.textContent && !triviaEl.textContent.includes('SERVER_TRIVIA_CATALOG')) { 
+        TRIVIA_CATALOG = JSON.parse(triviaEl.textContent); 
+      } else { 
+        throw new Error("Modo local"); 
+      } 
+    } catch(e) { 
+      TRIVIA_CATALOG = FALLBACK_TRIVIA_CATALOG; 
+    }
+
+    if (!TRIVIA_CATALOG || TRIVIA_CATALOG.length === 0) { 
+      TRIVIA_CATALOG = FALLBACK_TRIVIA_CATALOG; 
+    }
+
+     
+    const IconCpu = ({ className, style }) => <svg className={className} style={style} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect x="4" y="4" width="16" height="16" rx="2" ry="2"></rect><rect x="9" y="9" width="6" height="6"></rect><line x1="9" y1="1" x2="9" y2="4"></line><line x1="15" y1="1" x2="15" y2="4"></line><line x1="9" y1="20" x2="9" y2="23"></line><line x1="15" y1="20" x2="15" y2="23"></line><line x1="20" y1="9" x2="23" y2="9"></line><line x1="20" y1="14" x2="23" y2="14"></line><line x1="1" y1="9" x2="4" y2="9"></line><line x1="1" y1="14" x2="4" y2="14"></line></svg>;
+    const IconZap = ({ className }) => <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>;
+    const IconChevronRight = ({ className }) => <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="9 18 15 12 9 6"></polyline></svg>;
+    const IconTrophy = ({ className }) => <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"></path><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"></path><path d="M4 22h16"></path><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"></path><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"></path><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"></path></svg>;
+    const IconPause = ({ className }) => <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>;
+    const IconPlay = ({ className }) => <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>;
+    const IconHeart = ({ className, filled }) => <svg className={className} viewBox="0 0 24 24" fill={filled ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path></svg>;
+    const IconLock = ({ className }) => <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>;
+    const IconInfo = ({ className }) => <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>;
+    const IconSearch = ({ className }) => <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>;
+    const IconImpact = ({ className }) => (
+      <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+      </svg>
+    );
+    const IconDefect = ({ className }) => (
+      <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+        <line x1="12" y1="9" x2="12" y2="13"></line>
+        <line x1="12" y1="17" x2="12.01" y2="17"></line>
+      </svg>
+    );
+
+    /* --- AUDIO SYNTH --- */
+    const playTone = (type) => {
+      try {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = ctx.createOscillator(); 
+        const gainNode = ctx.createGain();
+        osc.connect(gainNode); 
+        gainNode.connect(ctx.destination);
+        
+        if (type === 'great') { 
+          osc.type = 'sine'; 
+          osc.frequency.setValueAtTime(1046.50, ctx.currentTime); 
+          osc.frequency.exponentialRampToValueAtTime(2093.00, ctx.currentTime + 0.1); 
+          gainNode.gain.setValueAtTime(0.15, ctx.currentTime); 
+          gainNode.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4); 
+          osc.start(); 
+          osc.stop(ctx.currentTime + 0.4); 
+        } else if (type === 'success') { 
+          osc.type = 'sine'; 
+          osc.frequency.setValueAtTime(880, ctx.currentTime); 
+          osc.frequency.exponentialRampToValueAtTime(1760, ctx.currentTime + 0.1); 
+          gainNode.gain.setValueAtTime(0.1, ctx.currentTime); 
+          gainNode.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.3); 
+          osc.start(); 
+          osc.stop(ctx.currentTime + 0.3); 
+        } else if (type === 'powerup') { 
+          osc.type = 'square'; 
+          osc.frequency.setValueAtTime(523.25, ctx.currentTime); 
+          osc.frequency.setValueAtTime(659.25, ctx.currentTime + 0.1); 
+          osc.frequency.setValueAtTime(783.99, ctx.currentTime + 0.2); 
+          osc.frequency.setValueAtTime(1046.50, ctx.currentTime + 0.3); 
+          gainNode.gain.setValueAtTime(0.1, ctx.currentTime); 
+          gainNode.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.6); 
+          osc.start(); 
+          osc.stop(ctx.currentTime + 0.6); 
+        } else if (type === 'fail') { 
+          osc.type = 'sawtooth'; 
+          osc.frequency.setValueAtTime(150, ctx.currentTime); 
+          gainNode.gain.setValueAtTime(0.1, ctx.currentTime); 
+          gainNode.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4); 
+          osc.start(); 
+          osc.stop(ctx.currentTime + 0.4); 
+        } else if (type === 'gameover') { 
+          osc.type = 'square'; 
+          osc.frequency.setValueAtTime(200, ctx.currentTime); 
+          osc.frequency.exponentialRampToValueAtTime(50, ctx.currentTime + 0.8); 
+          gainNode.gain.setValueAtTime(0.1, ctx.currentTime); 
+          gainNode.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 1.0); 
+          osc.start(); 
+          osc.stop(ctx.currentTime + 1.0); 
+        }
+      } catch (e) {}
+    };
+
+    /* --- MOTOR DEL JUEGO --- */
+    const generateLevel = (score) => {
+      const difficulty = Math.floor(score / 300);
+      let baseCanvases = 1;
+      
+      if (difficulty >= 2) baseCanvases = Math.random() > 0.6 ? 2 : 1; 
+      if (difficulty >= 4) baseCanvases = Math.random() > 0.5 ? 3 : 2; 
+      if (difficulty >= 6) baseCanvases = 3;
+      
+      const numCanvases = Math.max(GAME_CONFIG.sequentialCanvases.min, Math.min(baseCanvases, GAME_CONFIG.sequentialCanvases.max));
+      const canvases = [];
+
+      for (let c = 0; c < numCanvases; c++) {
+        let baseBars = 1;
+        if (difficulty >= 1) baseBars = Math.random() > 0.5 ? 2 : 1; 
+        if (difficulty >= 3) baseBars = Math.random() > 0.6 ? 3 : 2; 
+        if (difficulty >= 5) baseBars = 3;
+        
+        if (numCanvases === 3 && baseBars > 2) baseBars = 2;
+        
+        const numBars = Math.max(GAME_CONFIG.concentricRings.min, Math.min(baseBars, GAME_CONFIG.concentricRings.max));
+        const bars = [];
+        
+        let calculatedSpeed = GAME_CONFIG.speed.min + (difficulty * 0.3) + (Math.random() * 1.0);
+        let baseSharedSpeed = Math.max(GAME_CONFIG.speed.min, Math.min(calculatedSpeed, GAME_CONFIG.speed.max));
+        let directionMultiplier = (difficulty >= 3 && c % 2 !== 0) ? -1 : 1; 
+        const sharedSpeed = baseSharedSpeed * directionMultiplier;
+        const winningDistance = Math.abs(sharedSpeed) * (90 + (Math.random() * 60));
+        
+        const getRadius = (index) => { 
+          const baseRadii = [80, 55, 30]; 
+          return index < baseRadii.length ? baseRadii[index] : Math.max(10, 30 - ((index - 2) * 15)); 
+        };
+        
+        let calculatedTargetWidth = 70 - (difficulty * 5) + (Math.random() * 20);
+        const targetWidth = Math.max(GAME_CONFIG.targetSize.min, Math.min(GAME_CONFIG.targetSize.max, calculatedTargetWidth)); 
+        let calculatedGreatWidth = targetWidth * 0.25;
+        const greatWidth = Math.max(GAME_CONFIG.greatSize.min, Math.min(GAME_CONFIG.greatSize.max, calculatedGreatWidth));
+        
+        const targetStart = Math.random() * 360; 
+        let initialPos = ((targetStart + (greatWidth / 2)) - (winningDistance * directionMultiplier)) % 360;
+        if (initialPos < 0) initialPos += 360;
+
+        for (let i = 0; i < numBars; i++) {
+          const ringOffset = i * 75;
+          bars.push({ 
+            id: i, 
+            radius: getRadius(i), 
+            speed: sharedSpeed, 
+            targetStart: (targetStart + ringOffset) % 360, 
+            targetWidth: targetWidth, 
+            greatWidth: greatWidth, 
+            initialPos: (initialPos + ringOffset) % 360 
+          });
+        }
+        canvases.push(bars);
+      }
+      return canvases;
+    };
+
+    
+
+    function App() {
+      const [currentScreen, setCurrentScreen] = useState('title');
+      const [isScreenVisible, setIsScreenVisible] = useState(false); 
+      const [finalScore, setFinalScore] = useState(0);
+      const [gameDuration, setGameDuration] = useState(0); 
+      const [globalInvincible, setGlobalInvincible] = useState(false);
+      
+      const [leaderboard, setLeaderboard] = useState([]);
+      const [isLeaderboardLoading, setIsLeaderboardLoading] = useState(false);
+      const [lastSavedEmpId, setLastSavedEmpId] = useState(null);
+      const [toastInfo, setToastInfo] = useState(null); 
+      
+      const lungRef = useRef(null);
+      const scoreQueueRef = useRef([]);
+      const isProcessingQueueRef = useRef(false);
+      const leaderboardRef = useRef([]);
+
+
+      useEffect(() => { 
+        leaderboardRef.current = leaderboard; 
+      }, [leaderboard]);
+
+
+const processQueue = async () => {
+console.log("⏳ 1. processQueue invocado. Procesando:", isProcessingQueueRef.current, "| Cola:", scoreQueueRef.current.length);
+
+  
+  if (isProcessingQueueRef.current) return;
+
+  
+  if (scoreQueueRef.current.length === 0) {
+    console.log("✅ 2. Cola vacía. Apagando estado de carga de la tabla...");
+    setIsLeaderboardLoading(false); 
+    return;
+  }
+  
+  isProcessingQueueRef.current = true;
+  setIsLeaderboardLoading(true);
+  
+  const task = scoreQueueRef.current[0];
+  let success = false; 
+  let attempt = 0;
+  
+  while (!success && attempt < 5) {
+    try {
+      console.log(`🚀 3. Intento ${attempt + 1}: Enviando datos al servidor...`);
+      const result = await executeSaveOnServer(task.empId, task.score, task.mode, task.duration);
+      
+      console.log("📥 4. Respuesta recibida del servidor:", result);
+      if (result && result.success) {
+        setLeaderboard(result.leaderboard);
+        if (result.savedEmpId) setLastSavedEmpId(result.savedEmpId);
+        success = true;
+      } else if (result && !result.success && result.reason === 'LIMIT_REACHED') {
+        setLeaderboard(result.leaderboard);
+        setToastInfo(`⚠️ Puntuación no registrada: Has superado el límite de intentos.`);
+        setTimeout(() => setToastInfo(null), 5000);
+        success = true; 
+      } else { 
+        throw new Error("Respuesta inválida"); 
+      }
+    } catch (err) {
+      console.error("❌ 5. Error detectado en el intento:", err);
+      attempt++;
+      if (attempt < 5) {
+      console.log("🔄 Reintentando en breve...");
+        await new Promise(resolve => setTimeout(resolve, Math.pow(2, attempt) * 1000));
+      }
+    }
+  }
+  
+  
+  console.log("🧹 6. Limpiando tarea completada y quitando candado.");
+  scoreQueueRef.current.shift();
+  isProcessingQueueRef.current = false;
+  
+  
+  processQueue();
+};
+
+
+    const executeSaveOnServer = (empId, score, modeType, durationInSeconds) => {
+        return new Promise((resolve, reject) => {
+          if (typeof google !== 'undefined' && google.script && google.script.run) {
+            
+            
+            google.script.run
+              .withSuccessHandler((userResult) => {
+                
+                
+                const userInfo = (userResult && userResult.success) 
+                  ? userResult 
+                  : { employeeId: empId, username: "TÉCNICO " + empId, email: "", position: "", site: "" };
+
+                
+                google.script.run
+                  .withSuccessHandler((saveResult) => {
+                    if (saveResult && saveResult.success) {
+                      
+                      
+                      google.script.run
+                        .withSuccessHandler((lbData) => {
+                          
+                          const formattedLb = (lbData || []).map(item => ({
+                            id: item.id || item.employeeId || item.name, 
+                            name: item.name,
+                            score: item.score
+                          }));
+                          
+                          
+                          resolve({ 
+                            success: true, 
+                            savedEmpId: userInfo.employeeId, 
+                            leaderboard: formattedLb 
+                          });
+                        })
+                        .withFailureHandler(reject)
+                        .getLeaderboardFromSheet(CURRENT_GAME, "Todos");
+
+                    } else {
+                      
+
+                      const cleanedLeaderboard = leaderboardRef.current.filter(item => item.name !== "ACTUALIZANDO...");
+
+                      resolve({ success: false, reason: 'LIMIT_REACHED', leaderboard: cleanedLeaderboard });
+                      leaderboard: cleanedLeaderboard
+                    }
+                  })
+                  .withFailureHandler(reject)
+                  .saveScoreToSheet(score, userInfo, durationInSeconds);
+              })
+              .withFailureHandler(reject)
+              .getUserInfo(empId);
+
+          } else {
+            
+            setTimeout(() => {
+              const simulatedName = "ABRAHAM TORRES"; 
+              const mockList = [ 
+                { id: simulatedName, name: simulatedName, score: score }, 
+                ...leaderboardRef.current.filter(item => item.name !== simulatedName) 
+              ].sort((a, b) => b.score - a.score);
+              
+              resolve({ success: true, savedEmpId: simulatedName, leaderboard: mockList });
+            }, 1200);
+          }
+        });
+      };
+
+
+const changeScreen = useCallback((newScreen) => {
+  setIsScreenVisible(false); 
+  setTimeout(() => { 
+    setCurrentScreen(newScreen); 
+    setTimeout(() => { setIsScreenVisible(true); }, 50); 
+  }, 600); 
+}, []);
+
+useEffect(() => { setTimeout(() => setIsScreenVisible(true), 100); }, []);
+
+const fetchScores = useCallback(() => {
+        if (isProcessingQueueRef.current || scoreQueueRef.current.length > 0){ 
+          return;
+        }
+        setIsLeaderboardLoading(true);
+        
+        if (typeof google !== 'undefined' && google.script && google.script.run) {
+          google.script.run
+            .withSuccessHandler((data) => {
+              if (!isProcessingQueueRef.current && scoreQueueRef.current.length === 0 && data) {
+                
+                const formattedData = data.map(item => ({
+                  id: item.id || item.employeeId || item.name, 
+                  name: item.name,
+                  score: item.score
+                }));
+                setLeaderboard(formattedData);
+              }
+              setIsLeaderboardLoading(false);
+            })
+            .withFailureHandler(() => setIsLeaderboardLoading(false))
+            .getLeaderboardFromSheet("AJUSTE_CRITICO", "Todos");
+        } else {
+          
+          setTimeout(() => {
+            if (leaderboardRef.current.length === 0) {
+              setLeaderboard([
+                { id: "JUAN ONTIVEROS", name: "JUAN ONTIVEROS", score: 2800 },
+                { id: "ABRAHAM TORRES", name: "ABRAHAM TORRES", score: 2100 }
+              ]);
+            }
+            setIsLeaderboardLoading(false);
+          }, 800);
+        }
+      }, []);
+
+
+
+      useEffect(() => { fetchScores(); }, [fetchScores, currentScreen]);
+
+      useEffect(() => {
+        const shouldAnimate = GAME_CONFIG && GAME_CONFIG.animateLungBreathe !== false && GAME_CONFIG.animateLungBreathe !== "false";
+        if (!GAME_CONFIG || !GAME_CONFIG.showLungOverlay || !shouldAnimate) {
+          if (lungRef.current) { 
+            lungRef.current.style.transform = 'scale(0.95) translate3d(0,0,0)'; 
+            lungRef.current.style.opacity = '0.40'; 
+          }
+          return;
+        }
+
+        let rId; let angle = 0; const speedStep = 0.03; 
+        
+        const animateLung = () => {
+          angle = (angle + speedStep) % (Math.PI * 2);
+          const scale = 0.95 + Math.sin(angle) * 0.04; 
+          const opacity = globalInvincible 
+            ? 0.50 + (Math.sin(angle * 2.5) + 1) * 0.25 
+            : 0.30 + (Math.sin(angle) + 1) * 0.15;       
+          
+          if (lungRef.current) { 
+            lungRef.current.style.transform = `scale(${scale}) translate3d(0,0,0)`; 
+            lungRef.current.style.opacity = opacity; 
+          }
+          rId = requestAnimationFrame(animateLung);
+        };
+        
+        rId = requestAnimationFrame(animateLung);
+        return () => cancelAnimationFrame(rId);
+      }, [globalInvincible]);
+
+      const handleGameOver = (score, duration) => {
+        setFinalScore(score); setGameDuration(duration); setGlobalInvincible(false); setLastSavedEmpId(null); changeScreen('gameover');
+      };
+
+      const handleSaveScore = useCallback((modeType, submittedEmpId) => {
+        const optimisticId = submittedEmpId || 'SNC';
+        const newOptimisticRecord = { id: optimisticId, name: "ACTUALIZANDO...", score: finalScore };
+
+        setLeaderboard(prev => {
+          const cleaned = prev.filter(item => item.id !== optimisticId);
+          return [newOptimisticRecord, ...cleaned].sort((a, b) => b.score - a.score);
+        });
+
+        setLastSavedEmpId(optimisticId);
+        scoreQueueRef.current.push({ empId: submittedEmpId, score: finalScore, mode: modeType, duration: gameDuration });
+        processQueue();
+        changeScreen('leaderboard');
+      }, [finalScore, gameDuration, changeScreen]);
+
+      return (
+        <div className="relative min-h-screen flex items-center justify-center overflow-hidden font-sans w-full bg-[#050505]">
+          {toastInfo && (
+            <div className="absolute top-4 left-1/2 -translate-x-1/2 z-50 animate-[hologram-boot_0.5s_ease-out] w-[90%] max-w-sm">
+              <div className="border border-red-500/50 shadow-xl p-4 rounded-2xl flex items-center gap-3 bg-black/90">
+                <IconInfo className="w-6 h-6 text-red-400 shrink-0" />
+                <span className="text-white text-xs font-bold leading-snug">{toastInfo}</span>
+              </div>
+            </div>
+          )}
+          
+          {/* ARQUITECTURA: Cuadrícula de fondo restaurada (0% consumo de GPU porque es matemática plana) */}
+          <div className="absolute inset-0 pointer-events-none z-0" style={{ backgroundColor: '#050505', backgroundImage: `radial-gradient(rgba(194, 31, 50, 0.2) 1.5px, transparent 1.5px), radial-gradient(rgba(194, 31, 50, 0.2) 1.5px, transparent 1.5px), linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px)`, backgroundSize: '40px 40px, 40px 40px, 20px 20px, 20px 20px', backgroundPosition: '0 0, 20px 20px, 0 0, 0 0', transform: 'translate3d(0,0,0)', backfaceVisibility: 'hidden' }} />
+
+          {GAME_CONFIG.showLungOverlay && (
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-0 overflow-hidden">
+              <img 
+                ref={lungRef} 
+                src={SAFE_URLS.LUNG} 
+                alt="Lung" 
+                className="w-[350px] h-[350px] sm:w-[500px] sm:h-[500px] md:w-[750px] md:h-[750px] object-contain opacity-40" 
+                style={{ transform: 'translate3d(0,0,0) scale(0.95)', backfaceVisibility: 'hidden', willChange: 'transform, opacity' }} 
+              />
+            </div>
+          )}
+
+          {currentScreen === 'title' && <TitleScreen onStart={() => changeScreen('game')} onLeaderboard={() => changeScreen('leaderboard')} isVisible={isScreenVisible} />}
+          {currentScreen === 'game' && <GameScreen onGameOver={handleGameOver} onQuit={() => changeScreen('title')} setGlobalInvincible={setGlobalInvincible} isVisible={isScreenVisible} />}
+          {currentScreen === 'gameover' && <GameOverScreen score={finalScore} onSave={handleSaveScore} mode={GAME_CONFIG.scoreEntryMode} isVisible={isScreenVisible} />}
+          {currentScreen === 'leaderboard' && <LeaderboardScreen scores={leaderboard} isLoading={isLeaderboardLoading} lastSavedEmpId={lastSavedEmpId} onBack={() => changeScreen('title')} isVisible={isScreenVisible} />}
+
+          
+        </div>
+      );
+    }
+
+    /* =========================================================================
+       PANTALLA DE TÍTULO
+       ========================================================================= */
+    /* =========================================================================
+       PANTALLA DE TÍTULO (CON MODAL DE INSTRUCCIONES ACTUALIZADO)
+       ========================================================================= */
+    function TitleScreen({ onStart, onLeaderboard, isVisible }) {
+      const [showModal, setShowModal] = useState(false);
+      const [instructions, setInstructions] = useState([]);
+      const [currentIndex, setCurrentIndex] = useState(0);
+      const [isLoadingInstructions, setIsLoadingInstructions] = useState(false);
+
+      const handleOpenInstructions = (e) => {
+        e.preventDefault();
+        setShowModal(true);
+        setCurrentIndex(0);
+        
+        if (instructions.length === 0) {
+          setIsLoadingInstructions(true);
+          
+          if (typeof google !== 'undefined' && google.script && google.script.run) {
+            google.script.run
+              .withSuccessHandler((data) => {
+                if (!data || data.length === 0) {
+                  setInstructions([{ title: "Sin datos", desc: "No hay instrucciones disponibles en la base de datos.", img: "" }]);
+                } else {
+                  setInstructions(data);
+                }
+                setIsLoadingInstructions(false);
+              })
+              .withFailureHandler(() => {
+                setInstructions([{ title: "Error", desc: "Hubo un problema al cargar las instrucciones.", img: "" }]);
+                setIsLoadingInstructions(false);
+              })
+              .getInstructions(CURRENT_GAME);
+          } else {
+            // Entorno de prueba (Local)
+            setTimeout(() => {
+              setInstructions([
+                { title: "Monitor de Signos", desc: "Este dispositivo muestra la frecuencia en tiempo real.", img: "https://placehold.co/400x600/10b981/050505?text=Vertical" },
+                { title: "Desfibrilador", desc: "Equipo crítico para restablecer el ritmo cardíaco.", img: "https://placehold.co/400x300/c21f32/ffffff?text=Horizontal" }
+              ]);
+              setIsLoadingInstructions(false);
+            }, 1000);
+          }
+        }
+      };
+
+      const handleNextOrClose = () => {
+        if (currentIndex < instructions.length - 1) {
+          setCurrentIndex(prev => prev + 1);
+        } else {
+          setShowModal(false);
+        }
+      };
+
+      return (
+        <div className={`relative z-10 w-full max-w-lg p-6 transition-all duration-700 transform ${isVisible ? 'translate-y-0 opacity-100 scale-100' : 'translate-y-12 opacity-0 scale-95'}`}>
+          <div className="relative overflow-hidden rounded-3xl border border-white/20 shadow-xl p-10 flex flex-col items-center text-center bg-black/80">
+            
+            <div className="rounded-xl overflow-hidden mb-4">
+               <img src={SAFE_URLS.LOGO} alt="Plexus Logo" className="h-20 object-contain" />
+            </div>
+            
+            <p className="text-neutral-300 uppercase tracking-[0.2em] text-sm font-medium mb-8">Ajuste Crítico Pro</p>
+            
+            <div className="relative mb-6">
+              <img 
+                src={"https://drive.google.com/thumbnail?id=19FTVhVxfRAB0r-7p8pdcmWHZMqRVzCSl&sz=w400"} 
+                style={{ width: "350px", animation: "float 3s ease-in-out infinite" }} 
+                alt="Paciente"
+              />  
+            </div>
+            
+            {GAME_CONFIG.isGameActive ? (
+              <button 
+                onPointerDown={(e) => { e.preventDefault(); if (isVisible) onStart(); }} 
+                className="w-full relative group overflow-hidden rounded-xl border border-plexus-400/50 py-5 mb-3 shadow-lg hover:scale-[1.03] active:scale-95 transition-all duration-300 bg-plexus-600/80 hover:bg-plexus-500/90"
+              >
+                <div className="relative flex items-center justify-center gap-3">
+                  <IconZap className="w-6 h-6 text-white" />
+                  <span className="text-white font-bold tracking-wider text-lg uppercase">Iniciar Secuencia</span>
+                </div>
+              </button>
+            ) : (
+              <div className={`w-full rounded-xl border py-5 mb-3 shadow-inner flex flex-col items-center justify-center gap-1 ${GAME_CONFIG.campaignError ? 'border-red-500/50 bg-red-950/40 opacity-100' : 'border-neutral-700 bg-black/50 opacity-70'}`}>
+                <IconLock className={`w-6 h-6 mb-1 ${GAME_CONFIG.campaignError ? 'text-red-400' : 'text-neutral-500'}`} />
+                <span className={`font-bold tracking-wider text-sm uppercase ${GAME_CONFIG.campaignError ? 'text-red-400' : 'text-neutral-400'}`}>
+                  {GAME_CONFIG.campaignError ? 'Error en Base de Datos' : 'Campaña Inactiva'}
+                </span>
+                <span className={`text-[10px] uppercase font-mono tracking-widest text-center px-4 ${GAME_CONFIG.campaignError ? 'text-red-300' : 'text-neutral-600'}`}>
+                  {GAME_CONFIG.campaignError || GAME_CONFIG.campaignName}
+                </span>
+              </div>
+            )}
+            
+            <button 
+              onPointerDown={(e) => { e.preventDefault(); if (isVisible) onLeaderboard(); }} 
+              className="w-full rounded-xl border border-white/20 py-4 flex items-center justify-center gap-3 hover:scale-[1.03] active:scale-95 transition-all duration-300 bg-black/60 hover:bg-black/40"
+            >
+              <IconTrophy className="w-5 h-5 text-yellow-400" />
+              <span className="text-neutral-200 font-bold tracking-wider text-sm uppercase">Mejores Puntajes</span>
+            </button>
+
+            {/* Botón de Instrucciones: Más estrecho (w-4/5), color blanco opaco (neutral-200/90) y letras oscuras */}
+            <button 
+              onPointerDown={handleOpenInstructions} 
+              className="w-4/5 mx-auto mt-4 rounded-lg border border-neutral-300/50 py-2.5 flex items-center justify-center gap-2 hover:scale-[1.02] active:scale-95 transition-all duration-300 bg-neutral-200/90 hover:bg-neutral-100"
+            >
+              <IconInfo className="w-4 h-4 text-neutral-800" />
+              <span className="text-neutral-900 font-bold tracking-widest text-xs uppercase">Instrucciones</span>
+            </button>
+            
+          </div>
+
+          {/* --- MODAL DE INSTRUCCIONES --- */}
+          {showModal && (
+            <div className="absolute inset-0 z-50 flex items-center justify-center p-4 bg-black/90 backdrop-blur-sm transition-opacity duration-300">
+              <div className="relative w-full max-w-sm rounded-3xl border-2 border-red-600/60 overflow-hidden flex flex-col items-center p-6 bg-black shadow-2xl animate-zoom-in">
+                
+                {/* Título y un margen separador (border-bottom) de color rojo */}
+                <h2 className="text-xl font-black text-red-500 uppercase tracking-widest mb-4 border-b border-red-500/50 pb-3 w-full text-center">
+                  Instrucciones
+                </h2>
+
+                {isLoadingInstructions ? (
+                  <div className="flex flex-col items-center justify-center py-10">
+                    <div className="w-10 h-10 border-4 border-neutral-300/30 border-t-neutral-300 rounded-full animate-spin mb-4"></div>
+                    <span className="text-neutral-400 font-mono text-xs uppercase animate-pulse">Sincronizando...</span>
+                  </div>
+                ) : (
+                  <div className="w-full flex flex-col items-center transition-all duration-500">
+                    
+                    <div className="flex gap-2 mb-4">
+                      {instructions.map((_, idx) => (
+                        <div key={idx} className={`h-1.5 rounded-full transition-all duration-300 ${idx === currentIndex ? 'w-6 bg-neutral-300' : 'w-2 bg-neutral-700'}`} />
+                      ))}
+                    </div>
+
+                    {/* Margen blanco opaco para la tarjeta interna */}
+                    <div className="w-full bg-neutral-900/50 rounded-xl border border-neutral-200/30 p-3 mb-6 flex flex-col gap-3">
+                      
+                      {instructions[currentIndex]?.img && (
+                        <div className="w-full h-auto min-h-[150px] max-h-[50vh] bg-black rounded-lg overflow-hidden flex items-center justify-center border border-neutral-800">
+                          <img 
+                            src={instructions[currentIndex].img} 
+                            alt="Instrucción" 
+                            className="w-full h-full object-contain"
+                          />
+                        </div>
+                      )}
+                      
+                      <div className="flex flex-col text-left mt-2">
+                        <span className="font-black text-lg text-red-500 uppercase tracking-wider mb-2">
+                          {instructions[currentIndex]?.title}
+                        </span>
+                        <span className="text-neutral-300 text-sm leading-relaxed overflow-y-auto custom-scrollbar max-h-32">
+                          {instructions[currentIndex]?.desc}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Botón dinámico: Blanco opaco para "Siguiente", Rojo para "Cerrar" */}
+                    <button 
+                      onPointerDown={(e) => { e.preventDefault(); handleNextOrClose(); }}
+                      className={`w-full py-4 rounded-xl font-bold text-lg uppercase transition-all duration-300 active:scale-95 border ${
+                        currentIndex < instructions.length - 1 
+                          ? 'bg-neutral-200/90 hover:bg-neutral-100 border-neutral-300/50 text-neutral-900' 
+                          : 'bg-red-600/80 hover:bg-red-500/90 border-red-500/50 text-white'
+                      }`}
+                    >
+                      {currentIndex < instructions.length - 1 ? 'Siguiente' : 'Cerrar'}
+                    </button>
+                  </div>
+                )}
+                
+              </div>
+            </div>
+          )}
+          {/* -------------------------------------- */}
+          
+        </div>
+      );
+    }
+
+    /* =========================================================================
+       PANTALLA DE JUEGO (GAMEPLAY)
+       ========================================================================= */
+    function GameScreen({ onGameOver, onQuit, setGlobalInvincible, isVisible }) {
+      const [score, setScore] = useState(0); 
+      const [lives, setLives] = useState(GAME_CONFIG.initialLives); 
+      const [isPaused, setIsPaused] = useState(false); 
+      const [isExiting, setIsExiting] = useState(false); 
+      const [isPauseMounted, setIsPauseMounted] = useState(false); 
+      const [showPauseMenu, setShowPauseMenu] = useState(false); 
+      const [feedback, setFeedback] = useState(null); 
+      const [feedbackVisible, setFeedbackVisible] = useState(false); 
+      const [showContinue, setShowContinue] = useState(false); 
+      const [levelConfig, setLevelConfig] = useState([]); 
+      const [activeCanvasIndex, setActiveCanvasIndex] = useState(0); 
+      const [normalStreak, setNormalStreak] = useState(0); 
+      const [perfectStreak, setPerfectStreak] = useState(0); 
+      const [invincibleCanvasesLeft, setInvincibleCanvasesLeft] = useState(0); 
+      
+      const isInvincible = invincibleCanvasesLeft > 0; 
+      
+      const [visualNormalMax, setVisualNormalMax] = useState(false); 
+      const [visualPerfectMax, setVisualPerfectMax] = useState(false);
+      
+      const positionsRef = useRef([]); 
+      const requestRef = useRef(); 
+      const indicatorsRef = useRef([]); 
+      const inputLockedRef = useRef(false); 
+      
+      const [isRadarEntering, setIsRadarEntering] = useState(false); 
+      const gameStartTimeRef = useRef(Date.now()); 
+      const [triviaOfTheDay, setTriviaOfTheDay] = useState(null); 
+      
+      const stateRef = useRef({ isPaused, isExiting, feedback, levelConfig, showContinue, lives, score, perfectStreak, normalStreak, invincibleCanvasesLeft, activeCanvasIndex });
+
+      useEffect(() => { 
+        stateRef.current = { isPaused, isExiting, feedback, levelConfig, showContinue, lives, score, perfectStreak, normalStreak, invincibleCanvasesLeft, activeCanvasIndex }; 
+      }, [isPaused, isExiting, feedback, levelConfig, showContinue, lives, score, perfectStreak, normalStreak, invincibleCanvasesLeft, activeCanvasIndex]);
+
+      const initLevel = useCallback((currentScore, isNewGame) => {
+        const canvases = generateLevel(currentScore); 
+        setIsRadarEntering(true); 
+        setLevelConfig(canvases); 
+        setActiveCanvasIndex(0);
+        positionsRef.current = canvases.map(canvasBars => canvasBars.map(bar => ({ pos: bar.initialPos }))); 
+        indicatorsRef.current = []; 
+        setFeedback(null); 
+        setFeedbackVisible(false); 
+        setShowContinue(false); 
+        setVisualNormalMax(false); 
+        setVisualPerfectMax(false); 
+        setIsExiting(false); 
+        inputLockedRef.current = false;
+        
+        if (isNewGame) { 
+          setNormalStreak(0); 
+          setPerfectStreak(0); 
+          setInvincibleCanvasesLeft(0); 
+          setGlobalInvincible(false); 
+          setLives(GAME_CONFIG.initialLives); 
+          gameStartTimeRef.current = Date.now(); 
+        }
+      }, [setGlobalInvincible]);
+
+      useEffect(() => { initLevel(0, true); }, [initLevel]);
+
+      useEffect(() => { 
+        if (isRadarEntering) { 
+          const timer = setTimeout(() => setIsRadarEntering(false), 1000); 
+          return () => clearTimeout(timer); 
+        } 
+      }, [isRadarEntering]);
+
+      const triggerPause = () => { 
+        if (!isVisible) return; 
+        setIsPaused(true); 
+        setIsPauseMounted(true); 
+        setTimeout(() => setShowPauseMenu(true), 10); 
+      };
+
+      const handleResume = () => { 
+        setIsPaused(false); 
+        setShowPauseMenu(false); 
+        setTimeout(() => setIsPauseMounted(false), 500); 
+      };
+
+      const handleQuitFromPause = () => { 
+        setShowPauseMenu(false); 
+        setIsExiting(true); 
+        setTimeout(() => { 
+          setIsPaused(false); 
+          setIsPauseMounted(false); 
+          onQuit(); 
+        }, 400); 
+      };
+
+      const animate = useCallback(() => {
+        requestRef.current = requestAnimationFrame(animate);
+        const { isPaused, isExiting, feedback, levelConfig, activeCanvasIndex } = stateRef.current;
+        
+        if (isPaused || isExiting || feedback || levelConfig.length === 0) return;
+        
+        if (activeCanvasIndex < levelConfig.length) {
+            positionsRef.current[activeCanvasIndex].forEach((p, idx) => {
+              const bar = levelConfig[activeCanvasIndex][idx]; 
+              if (!bar) return;
+              p.pos = (p.pos + bar.speed + 360) % 360;
+              if (indicatorsRef.current[activeCanvasIndex] && indicatorsRef.current[activeCanvasIndex][idx]) { 
+                indicatorsRef.current[activeCanvasIndex][idx].style.transform = `rotate(${p.pos}deg)`; 
+              }
+            });
+        }
+      }, []);
+
+      useEffect(() => { 
+        requestRef.current = requestAnimationFrame(animate); 
+        return () => cancelAnimationFrame(requestRef.current); 
+      }, [animate]);
+
+      const processHit = useCallback(() => {
+        const { isPaused, isExiting, feedback, levelConfig, showContinue, perfectStreak, normalStreak, lives, invincibleCanvasesLeft, activeCanvasIndex } = stateRef.current;
+        if (isPaused || isExiting || feedback || levelConfig.length === 0 || showContinue || activeCanvasIndex >= levelConfig.length) return;
+        if (inputLockedRef.current) return; 
+
+        const currentCanvas = levelConfig[activeCanvasIndex]; 
+        const bar = currentCanvas[0]; 
+        const currentPos = positionsRef.current[activeCanvasIndex][0].pos;
+        
+        let hit = false; let greatHit = false;
+        const endAngle = bar.targetStart + bar.targetWidth; 
+        const greatEndAngle = bar.targetStart + bar.greatWidth;
+
+        if (endAngle > 360) { if (currentPos >= bar.targetStart || currentPos <= (endAngle % 360)) hit = true; } 
+        else { if (currentPos >= bar.targetStart && currentPos <= endAngle) hit = true; }
+
+        if (greatEndAngle > 360) { if (currentPos >= bar.targetStart || currentPos <= (greatEndAngle % 360)) greatHit = true; } 
+        else { if (currentPos >= bar.targetStart && currentPos <= greatEndAngle) greatHit = true; }
+
+        const wasInvincibleActive = invincibleCanvasesLeft > 0; 
+        if (wasInvincibleActive) hit = true;
+
+        if (hit) {
+          inputLockedRef.current = true; setTimeout(() => inputLockedRef.current = false, 300); 
+          const pointsEarned = greatHit ? 200 : 100; setScore(prev => prev + pointsEarned);
+
+          if (activeCanvasIndex < levelConfig.length - 1) { 
+            playTone(greatHit ? 'great' : 'success'); setActiveCanvasIndex(prev => prev + 1); 
+          } else {
+            setFeedback(greatHit ? 'great' : 'success'); playTone(greatHit ? 'great' : 'success'); setTimeout(() => setFeedbackVisible(true), 10); 
+            
+            if (!wasInvincibleActive) {
+              if (greatHit) {
+                const nextPerfectStreak = perfectStreak + 1; const nextNormalStreak = normalStreak + 1;
+                if (nextPerfectStreak >= 3) { setInvincibleCanvasesLeft(3); setGlobalInvincible(true); setVisualPerfectMax(true); setPerfectStreak(0); setNormalStreak(0); playTone('powerup'); setTimeout(() => setVisualPerfectMax(false), 2000); } 
+                else { setPerfectStreak(nextPerfectStreak); if (nextNormalStreak >= 3) { setLives(prev => Math.min(prev + 1, GAME_CONFIG.initialLives)); setVisualNormalMax(true); setNormalStreak(0); playTone('powerup'); setTimeout(() => setVisualNormalMax(false), 2000); } else { setNormalStreak(nextNormalStreak); } }
+              } else {
+                setPerfectStreak(0); const nextNormalStreak = normalStreak + 1;
+                if (nextNormalStreak >= 3) { setLives(prev => Math.min(prev + 1, GAME_CONFIG.initialLives)); setVisualNormalMax(true); setNormalStreak(0); playTone('powerup'); setTimeout(() => setVisualNormalMax(false), 2000); } else { setNormalStreak(nextNormalStreak); }
+              }
+            }
+            if (wasInvincibleActive) { setInvincibleCanvasesLeft(prev => { const next = prev - 1; if (next <= 0) setGlobalInvincible(false); return next; }); }
+            setTriviaOfTheDay(TRIVIA_CATALOG[Math.floor(Math.random() * TRIVIA_CATALOG.length)]); setTimeout(() => setShowContinue(true), 600);
+          }
+        } else {
+          inputLockedRef.current = true; setTimeout(() => inputLockedRef.current = false, 300);
+          setNormalStreak(0); setPerfectStreak(0); setFeedback('fail'); playTone('fail');
+          setLives(prev => { const newLives = prev - 1; if (newLives <= 0) playTone('gameover'); return newLives; });
+          setTriviaOfTheDay(TRIVIA_CATALOG[Math.floor(Math.random() * TRIVIA_CATALOG.length)]); setTimeout(() => setFeedbackVisible(true), 10); setTimeout(() => setShowContinue(true), 600);
+        }
+      }, [setGlobalInvincible]);
+
+      const handleContinue = useCallback(() => {
+        if (!isVisible) return; 
+        const { lives, score } = stateRef.current; setShowContinue(false); setFeedbackVisible(false); 
+        setTimeout(() => { if (lives <= 0) { const durationInSeconds = Math.floor((Date.now() - gameStartTimeRef.current) / 1000); onGameOver(score, durationInSeconds); } else { initLevel(score); } }, 500); 
+      }, [onGameOver, initLevel, isVisible]);
+
+      useEffect(() => { const handleKeyDown = (e) => { if (e.code === 'Space') { e.preventDefault(); if (stateRef.current.showContinue) handleContinue(); else processHit(); } }; window.addEventListener('keydown', handleKeyDown); return () => window.removeEventListener('keydown', handleKeyDown); }, [processHit, handleContinue]);
+
+      const radarSizeClass = levelConfig.length === 1 ? 'w-72 h-72' : (levelConfig.length === 2 ? 'w-40 h-40' : 'w-32 h-32'); 
+
+      return (
+        <div className={`relative z-10 w-full min-h-screen h-[100dvh] max-w-lg mx-auto flex flex-col justify-between border-x border-white/10 shadow-2xl transition-all duration-700 transform ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-12'} bg-black/80`} style={{ backfaceVisibility: 'hidden' }}>
+          
+          <div className="p-6 flex justify-between items-center border-b border-white/10 relative z-10 shrink-0 transition-all duration-500 bg-black/60">
+            <div className="flex flex-col"><span className="text-xs text-emerald-400 font-bold uppercase tracking-widest">Puntuación</span><span className="text-3xl font-mono font-black text-white">{score}</span></div>
+            <img src={SAFE_URLS.LOGO} alt="Plexus" className="h-6 rounded object-contain opacity-80" />
+            <div className="flex items-center gap-4">
+              <div className="flex flex-col items-end gap-1.5 mr-2">
+                <div className="flex items-center gap-1.5"><span className="text-[10px] text-emerald-500 font-bold uppercase tracking-wider">Combo</span><div className="flex gap-0.5">{[1, 2, 3].map(step => ( <div key={step} className={`w-2.5 h-1.5 rounded-sm transition-all duration-300 ${visualNormalMax ? 'bg-emerald-400 animate-pulse' : (step <= normalStreak ? 'bg-emerald-500' : 'bg-black/60 border border-white/10')}`} /> ))}</div></div>
+                <div className="flex items-center gap-1.5"><span className="text-[10px] text-yellow-500 font-bold uppercase tracking-wider">Perfecto</span><div className="flex gap-0.5">{[1, 2, 3].map(step => ( <div key={step} className={`w-2.5 h-1.5 rounded-sm transition-all duration-300 ${visualPerfectMax ? 'bg-yellow-400 animate-pulse' : (step <= perfectStreak ? 'bg-yellow-500' : 'bg-black/60 border border-white/10')}`} /> ))}</div></div>
+              </div>
+              <div className="flex gap-1">{Array.from({ length: GAME_CONFIG.initialLives }, (_, i) => i + 1).map(i => ( <IconHeart key={i} filled={i <= lives} className={`w-6 h-6 ${i <= lives ? 'text-red-500' : 'text-neutral-700'}`} /> ))}</div>
+              <button onPointerDown={(e) => { e.preventDefault(); triggerPause(); }} className="p-3 bg-white/10 rounded-full active:bg-white/20"><IconPause className="w-6 h-6 text-white" /></button>
+            </div>
+          </div>
+
+          <div className="flex-1 flex flex-col items-center justify-center relative p-4 gap-4">
+            <div className={`flex flex-row flex-wrap justify-center items-center gap-6 w-full ${isExiting ? 'animate-crt-shutdown' : ''}`}>
+              {levelConfig.map((canvasBars, cIdx) => {
+                const isSolved = cIdx < activeCanvasIndex; const isActive = cIdx === activeCanvasIndex; const isPending = cIdx > activeCanvasIndex;
+                let stateBorder = 'border-neutral-700 bg-black/60';
+                if (isSolved) stateBorder = 'border-neutral-500 bg-black/80 grayscale opacity-40';
+                if (isActive && feedback === 'great') stateBorder = 'border-white bg-white/20';
+                if (isActive && feedback === 'success') stateBorder = 'border-emerald-500 bg-emerald-500/10';
+                if (isActive && feedback === 'fail') stateBorder = 'border-red-500 bg-red-500/10 animate-shake';
+                if (isPending) stateBorder = 'border-neutral-800 bg-black/40 opacity-30 grayscale';
+                const animationClass = isRadarEntering ? 'animate-hologram-boot' : '';
+                return (
+                  <div key={cIdx} className={`relative ${radarSizeClass} rounded-full border-4 ${stateBorder} overflow-hidden transition-all duration-300 flex-shrink-0 ${animationClass}`} style={{ animationDelay: isRadarEntering ? `${cIdx * 150}ms` : '0ms', backfaceVisibility: 'hidden', willChange: 'transform, opacity' }}>
+                    <div className="absolute inset-0 flex items-center justify-center opacity-20 pointer-events-none"><svg width="60%" height="60%" viewBox="0 0 100 100" className="text-plexus-400"><rect x="15" y="15" width="70" height="70" rx="8" fill="none" stroke="currentColor" strokeWidth="2" strokeDasharray="4 4" /><circle cx="50" cy="50" r="15" fill="none" stroke="currentColor" strokeWidth="2" /><path d="M50 15 L50 85 M15 50 L85 50" stroke="currentColor" strokeWidth="1" strokeDasharray="2 2" /></svg></div>
+                    {/* ARQUITECTURA: Patrón interior del radar restaurado */}
+                    {isSolved && <div className="absolute inset-0 z-20 bg-black/40 pattern-bubble opacity-50"></div>}
+                    <svg viewBox="0 0 200 200" className="absolute inset-0 w-full h-full text-white z-10">
+                      {canvasBars.map((bar, idx) => {
+                        const circ = 2 * Math.PI * bar.radius; const targetDash = `${(bar.targetWidth / 360) * circ} ${circ}`; const greatDash = `${(bar.greatWidth / 360) * circ} ${circ}`;
+                        let trackStroke = "rgba(255,255,255,0.1)"; let targetStroke = "#34d399"; let greatStroke = "#ffffff"; let needleColor = bar.speed < 0 ? "#8b5cf6" : "#c21f32"; let needleBg = bar.speed < 0 ? "#8b5cf6" : "#c21f32"; let ringOpacity = "opacity-100 transition-opacity duration-300";
+                        if (isPending) { trackStroke = "rgba(255,255,255,0.02)"; targetStroke = "#374151"; greatStroke = "#4b5563"; needleColor = "#4b5563"; needleBg = "#374151"; ringOpacity = "opacity-30 transition-opacity duration-300"; } 
+                        else if (isSolved) { trackStroke = "rgba(255,255,255,0.04)"; targetStroke = "rgba(52, 211, 153, 0.4)"; greatStroke = "rgba(255, 255, 255, 0.4)"; needleColor = "rgba(16, 185, 129, 0.6)"; needleBg = "rgba(16, 185, 129, 0.4)"; ringOpacity = "opacity-60 transition-opacity duration-300"; }
+                        if (isInvincible && !isPending && !isSolved) { needleColor = "#ffffff"; needleBg = "#ffffff"; }
+                        return (
+                          <g key={bar.id} className={ringOpacity}>
+                            <circle cx="100" cy="100" r={bar.radius} fill="none" stroke={trackStroke} strokeWidth="12" />
+                            <circle cx="100" cy="100" r={bar.radius} fill="none" stroke={(isActive && feedback === 'fail') ? '#ef4444' : targetStroke} strokeWidth="12" strokeDasharray={targetDash} strokeDashoffset="0" transform={`rotate(${bar.targetStart - 90}, 100, 100)`} />
+                            <circle cx="100" cy="100" r={bar.radius} fill="none" stroke={(isActive && feedback === 'fail') ? 'transparent' : greatStroke} strokeWidth="12" strokeDasharray={greatDash} strokeDashoffset="0" transform={`rotate(${bar.targetStart - 90}, 100, 100)`} />
+                            <g ref={el => { if (!indicatorsRef.current[cIdx]) indicatorsRef.current[cIdx] = []; indicatorsRef.current[cIdx][idx] = el; }} style={{ transform: `rotate(${bar.initialPos}deg)`, transformOrigin: '100px 100px', willChange: 'transform' }}>
+                              <line x1="100" y1={100 - bar.radius + 8} x2="100" y2={100 - bar.radius - 8} stroke={(isActive && feedback === 'fail') ? '#ef4444' : needleColor} strokeWidth="4" strokeLinecap="round" />
+                              <circle cx="100" cy={100 - bar.radius} r="2" fill={(isActive && feedback === 'fail') ? '#ef4444' : needleBg} />
+                            </g>
+                          </g>
+                        );
+                      })}
+                    </svg>
+                  </div>
+                );
+              })}
+            </div>
+            
+            {/* Modal Feedback Dinámico */}
+            {feedback && (
+              <div className={`absolute inset-0 z-40 flex items-center justify-center pointer-events-none transition-all duration-500 transform ${feedbackVisible ? 'opacity-100 scale-100' : 'opacity-0 scale-90'}`}>
+                <div className="relative w-11/12 max-w-md rounded-3xl border border-white/20 overflow-hidden flex flex-col items-center justify-center p-6 transition-all duration-500 bg-black/90 shadow-xl">
+                  <div className="relative z-10 flex flex-col items-center text-center w-full">
+                    {feedback === 'great' && ( <div className="flex flex-col items-center gap-1"><span className="text-yellow-400 font-black uppercase text-lg leading-tight">¡Sincronización<br/>Perfecta!</span><div className="flex items-center gap-2 mt-1"><span className="text-yellow-400 text-5xl font-black">X2</span></div></div> )}
+                    {feedback === 'success' && <span className="text-green-500 font-black text-xl uppercase leading-tight">Sincronización<br/>Exitosa</span>}
+                    {feedback === 'fail' && <span className="text-red-500 font-black text-xl uppercase leading-tight">Falla<br/>en el Equipo</span>}
+                    {visualPerfectMax && <span className="text-yellow-300 font-black text-xl animate-pulse mt-2">¡INVENCIBLE!</span>}
+                    {visualNormalMax && <span className="text-green-500 text-xl font-black mt-2 animate-pulse">+1 VIDA</span>}
+                    <div className={`transition-all duration-500 ease-in-out ${showContinue ? 'max-h-0 opacity-0 overflow-hidden mt-0' : 'max-h-16 opacity-100 mt-5'}`}><div className="px-4 py-2 rounded-lg bg-black/60 border border-white/20 text-xs font-mono tracking-widest text-neutral-200 uppercase animate-pulse shadow-inner">{(feedback === 'success' || feedback === 'great') ? 'Esperando...' : 'RECALIBRANDO...'}</div></div>
+                    <div className={`w-full transition-all duration-700 ease-in-out flex flex-col items-center overflow-hidden ${showContinue ? 'max-h-[580px] opacity-100 mt-5' : 'max-h-0 opacity-0 mt-0'}`}>
+                      <div className="w-full bg-black/60 border border-neutral-700/80 rounded-xl overflow-hidden p-3 flex flex-col gap-3 pointer-events-auto">
+
+                        {triviaOfTheDay?.proy && (
+                            <div className="flex items-center justify-center mb-1">
+                              <span className="text-neutral-100 font-black text-lg uppercase">{triviaOfTheDay.proy}</span>
+                            </div>
+                          )}
+                          
+                        {/* Contenedor de la Imagen con altura reducida */}
+{triviaOfTheDay?.img && ( 
+    <div className="w-full h-auto max-h-72 bg-transparent rounded-lg overflow-hidden border border-neutral-700/50 relative flex items-center justify-center p-1.5">
+      <img 
+        src={triviaOfTheDay.img} 
+        alt="Promo" 
+        /* La imagen se adaptará perfectamente a la nueva altura del contenedor */
+        className="w-full h-full max-h-72 object-contain opacity-100 transition-all duration-500" 
+      />
+    </div> 
+  )}
+                          
+                        
+                        <div className="flex flex-col text-left gap-1">
+                        <div className="flex items-center gap-1.5 mb-1">
+                          {/* Ícono y Título con color dinámico basado en el feedback */}
+                          <IconInfo className={`w-4 h-4 shrink-0 ${feedback === 'fail' ? 'text-red-500' : 'text-green-500'}`} />
+                          <span className={`font-black text-[16px] uppercase tracking-widest leading-tight ${feedback === 'fail' ? 'text-red-500' : 'text-green-500'}`}>
+                            {triviaOfTheDay?.title}
+                          </span>
+                        </div>
+                        
+                        {triviaOfTheDay?.subt && (
+                          <div className="mb-2 mt-1">
+                            <span className="text-white font-bold text-xs sm:text-sm uppercase tracking-widest bg-neutral-600/40 border border-neutral-400/30 px-3 py-1 rounded-md shadow-sm inline-block">
+                              {triviaOfTheDay.subt}
+                            </span>
+                          </div>
+                        )}
+
+                        <span className="text-neutral-200 text-md leading-relaxed font-medium">
+                          {triviaOfTheDay?.desc}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+          </div>
+
+          <div className="p-6 pb-12 w-full relative z-10 shrink-0 h-32 flex items-end">
+            {showContinue ? (
+              <div className="w-full animate-slide-up-fade"><button onPointerDown={(e) => { e.preventDefault(); if (isVisible) handleContinue(); }} className="w-full h-24 rounded-2xl border flex flex-col items-center justify-center gap-3 active:scale-95 hover:scale-[1.02] transition-all duration-300 relative overflow-hidden group bg-plexus-600/80 hover:bg-plexus-500/90 border-plexus-400/50"><div className="flex items-center justify-center gap-2 relative z-10"><span className="text-2xl font-black tracking-widest text-white uppercase text-center">{lives <= 0 ? 'Analizar Falla' : 'Continuar'}</span><IconChevronRight className="w-8 h-8 text-white opacity-80" /></div></button></div>
+            ) : (
+              <div className={`w-full transition-all duration-300 ${feedback !== null ? 'opacity-0 scale-95 pointer-events-none' : 'opacity-100 scale-100'}`}><button onPointerDown={(e) => { e.preventDefault(); if (isVisible && stateRef.current.feedback === null && !stateRef.current.showContinue) processHit(); }} className="w-full h-32 rounded-2xl flex flex-col items-center justify-center border-2 active:scale-95 transition-all duration-300 text-white cursor-pointer hover:scale-[1.02] bg-plexus-600/80 hover:bg-plexus-500/90 border-plexus-400/50"><IconZap className="w-10 h-10 mb-2" /><span className="text-2xl font-black tracking-widest uppercase">TOCAR AQUI</span></button></div>
+            )}
+          </div>
+
+          {isPauseMounted && (
+            <div className={`absolute inset-0 z-50 flex items-center justify-center p-6 transition-all duration-500 ${showPauseMenu ? 'opacity-100' : 'opacity-0'} bg-black/80`}>
+              <div className={`relative w-full max-w-sm overflow-hidden rounded-3xl border border-white/20 p-8 flex flex-col items-center text-center transition-all duration-500 transform ${showPauseMenu ? 'scale-100 translate-y-0' : 'scale-95 translate-y-12'} bg-black/80`} style={{ backfaceVisibility: 'hidden' }}>
+                <div className="relative mb-6 mt-2">
+                  <div className="relative border border-white/20 p-5 rounded-2xl flex items-center justify-center bg-black/60">
+                    <IconPause className="w-10 h-10 text-white relative z-10" />
+                  </div>
+                </div>
+                <h2 className="text-4xl font-black text-white mb-1 uppercase tracking-widest">Pausado</h2>
+                <p className="text-neutral-400 text-xs uppercase tracking-[0.2em] mb-10 font-bold">Secuencia Interrumpida</p>
+                <button onPointerDown={(e) => { e.preventDefault(); handleResume(); }} className="w-full relative group overflow-hidden rounded-xl border border-emerald-500/50 py-5 mb-4 active:scale-95 transition-all duration-300 bg-emerald-600/80 hover:bg-emerald-500/90"><div className="relative flex items-center justify-center gap-3"><IconPlay className="w-6 h-6 text-white" /><span className="text-white font-bold tracking-wider text-lg uppercase">Reanudar</span></div></button>
+                <button onPointerDown={(e) => { e.preventDefault(); handleQuitFromPause(); }} className="w-full rounded-xl border border-white/20 py-4 flex items-center justify-center gap-3 active:scale-95 transition-all duration-300 bg-black/60 text-neutral-300 hover:text-white"><span className="font-bold tracking-wider text-sm uppercase">Salir al Menú</span></button>
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    /* =========================================================================
+       PANTALLA DE GAME OVER
+       ========================================================================= */
+    function GameOverScreen({ score, onSave, mode, isVisible }) {
+      const [empId, setEmpId] = useState(''); const [autoState, setAutoState] = useState(mode === 'AUTO' ? 'checking' : 'need_id'); const [resolvedName, setResolvedName] = useState('');
+      const isChecking = autoState === 'checking'; const isResolved = autoState === 'resolved';
+
+      useEffect(() => {
+        let isMounted = true; let timer1, timer2;
+        if (mode === 'AUTO') {
+          if (typeof google !== 'undefined' && google.script && google.script.run) {
+            google.script.run.withSuccessHandler((result) => { if (!isMounted) return; if (result && result.success) { setResolvedName(result.name); setAutoState('resolved'); timer1 = setTimeout(() => { if (isMounted) onSave("AUTO", result.empId || ""); }, 2200); } else { setAutoState('need_id'); } }).withFailureHandler(() => { if (isMounted) setAutoState('need_id'); }).getUserIdentityStatus();
+          } else {
+            timer2 = setTimeout(() => { if (!isMounted) return; if (typeof google !== 'undefined') { setAutoState('need_id'); return; } const localSimulationSuccess = true; if (localSimulationSuccess) { setResolvedName("TECNICO PRUEBA"); setAutoState('resolved'); timer1 = setTimeout(() => { if (isMounted) onSave("AUTO", "123456"); }, 2000); } else { setAutoState('need_id'); } }, 1800);
+          }
+        }
+        return () => { isMounted = false; clearTimeout(timer1); clearTimeout(timer2); };
+      }, [onSave, mode]);
+
+      const handleSubmit = (e) => { e.preventDefault(); if (isVisible && /^\d{6}$/.test(empId)) { onSave(mode, empId); } };
+
+      return (
+        <div className={`relative z-10 w-full max-w-lg p-6 transition-all duration-700 transform ${isVisible ? 'translate-y-0 opacity-100 scale-100' : 'translate-y-12 opacity-0 scale-95'}`}>
+          <div className={`relative overflow-hidden rounded-3xl border p-10 flex flex-col items-center text-center transition-all duration-500 bg-black/80 border-red-900/60 shadow-xl`} style={{ backfaceVisibility: 'hidden' }}>
+            <h2 className="text-4xl font-black text-red-400 mb-2 uppercase">Sistema Crítico</h2><p className="text-neutral-300 mb-8">Puntuación Final Registrada</p><div className="text-6xl font-mono font-black text-white mb-10">{score}</div>
+            {mode === 'AUTO' || mode === 'EMPID' ? (
+              <div className="w-full">
+                {(isChecking || isResolved) && (
+                  <div className={`w-full py-6 px-4 rounded-xl flex flex-col items-center justify-center gap-3 relative overflow-hidden transition-all duration-700 transform ${isChecking ? 'bg-black/60 border border-white/20 scale-100' : 'bg-emerald-950/60 border border-emerald-500/50 animate-success-pop'}`} style={{ transform: 'translateZ(0)', backfaceVisibility: 'hidden' }}>
+                    <div className="relative z-10 flex flex-col items-center justify-center text-center transition-all duration-500 w-full">
+                      {isChecking ? ( <div className="flex flex-col items-center gap-3 animate-zoom-in"><IconCpu className={`w-10 h-10 text-emerald-400`} style={{ transform: 'translateZ(0)', backfaceVisibility: 'hidden', willChange: 'transform, opacity' }} /><span className="text-white font-bold tracking-widest uppercase text-xs animate-pulse">Leyendo credenciales...</span></div> ) : ( <div className="flex flex-col items-center gap-2 animate-zoom-in"><span className="text-emerald-400 font-mono text-[10px] uppercase tracking-widest">TÉCNICO IDENTIFICADO</span><span className="text-white font-black text-xl tracking-wider uppercase">{resolvedName}</span><span className="text-neutral-400 text-xs animate-pulse mt-2">Guardando récord en base de datos...</span></div> )}
+                    </div>
+                  </div>
+                )}
+                {autoState === 'need_id' && (
+                  <form onSubmit={handleSubmit} className="w-full animate-zoom-in">
+                    <label className="block text-xs font-bold text-neutral-400 mb-2 uppercase tracking-widest">{mode === 'EMPID' ? 'Identificación Requerida' : 'Identificación Automática Fallida'}</label>
+                    <p className="text-[13px] text-neutral-400 mb-6 leading-relaxed">Introduce tu Número de Empleado de 6 dígitos para registrar tu récord de forma segura.</p>
+                    <input type="text" maxLength={6} pattern="\d*" value={empId} onChange={(e) => { const val = e.target.value.replace(/\D/g, ''); setEmpId(val); }} className="w-full bg-black/60 border border-white/20 rounded-xl text-center text-5xl font-mono font-bold text-white py-6 mb-6 focus:outline-none focus:border-plexus-500 uppercase" placeholder="000000" required />
+                    <button type="submit" disabled={empId.length !== 6} className={`w-full py-5 rounded-xl font-bold text-xl uppercase transition-all duration-300 ${empId.length === 6 ? 'bg-plexus-600/80 hover:bg-plexus-500/90 active:scale-95 text-white' : 'bg-black/60 text-neutral-500 cursor-not-allowed border border-white/5 shadow-none'}`}>Registrar Récord</button>
+                  </form>
+                )}
+              </div>
+            ) : (
+              <form onSubmit={handleSubmit} className="w-full">
+                <label className="block text-xs font-bold text-neutral-400 mb-2 uppercase tracking-widest">Introduce tu número de empleado</label>
+                <p className="text-[13px] text-neutral-400 mb-6 leading-relaxed">Introduce tu Número de Empleado de 6 dígitos para registrar tu récord de calibración.</p>
+                <input type="text" maxLength={6} pattern="\d*" value={empId} onChange={(e) => { const val = e.target.value.replace(/\D/g, ''); setEmpId(val); }} className="w-full bg-black/60 border border-white/20 rounded-xl text-center text-5xl font-mono font-bold text-white py-6 mb-6 focus:outline-none focus:border-plexus-500 uppercase" placeholder="000000" required />
+                <button type="submit" disabled={empId.length !== 6} className={`w-full py-5 rounded-xl font-bold text-xl uppercase transition-all duration-300 ${empId.length === 6 ? 'bg-plexus-600/80 hover:bg-plexus-500/90 active:scale-95 text-white' : 'bg-black/60 text-neutral-500 cursor-not-allowed border border-white/5 shadow-none'}`}>Guardar Puntuación</button>
+              </form>
+            )}
+          </div>
+        </div>
+      );
+    }
+
+    /* =========================================================================
+       PANTALLA DE LEADERBOARD
+       ========================================================================= */
+    function LeaderboardRow({ entry, rank, isHighlight, delay }) {
+      const [displayScore, setDisplayScore] = useState(entry.score);
+      const [animClass, setAnimClass] = useState('animate-row-enter');
+      const rowRef = useRef(null);
+
+      useEffect(() => {
+        if (entry.score > displayScore) {
+          setAnimClass('animate-flip-update');
+          setTimeout(() => { setDisplayScore(entry.score); }, 400); 
+          setTimeout(() => { setAnimClass(''); }, 800);
+        }
+      }, [entry.score]);
+
+      useEffect(() => {
+        if (isHighlight && rowRef.current) {
+          setTimeout(() => { rowRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' }); }, 800);
+        }
+      }, [isHighlight]);
+
+      const rankColors = [
+        'text-yellow-400 border-yellow-400/40 bg-yellow-400/5', 
+        'text-neutral-300 border-neutral-300/30 bg-white/5', 
+        'text-amber-600 border-amber-600/30 bg-amber-600/5' 
+      ];
+      
+      const isPodium = rank <= 3;
+      const highlightedStyle = isHighlight 
+        ? 'border-2 border-emerald-400 bg-emerald-500/10' 
+        : (isPodium ? `border ${rankColors[rank-1]}` : 'border border-white/5 bg-black/40');
+
+      return (
+        <div ref={rowRef} className={`flex justify-between items-center rounded-lg p-4 transition-all duration-500 ${highlightedStyle} ${animClass}`} style={animClass === 'animate-row-enter' ? { animationFillMode: 'both', animationDelay: `${delay}ms` } : {}}>
+          <div className="flex items-center gap-4 flex-1 min-w-0">
+            <span className={`font-black text-xl w-6 shrink-0 text-center ${isPodium ? '' : 'text-neutral-600'}`}>#{rank}</span>
+            <span className={`font-mono font-bold tracking-wider truncate max-w-[180px] sm:max-w-[250px] ${isPodium ? 'text-white text-lg' : 'text-neutral-300 text-base'}`}>{entry.name}</span>
+          </div>
+          <span className={`font-mono font-black shrink-0 ml-2 ${isPodium ? 'text-2xl text-white' : 'text-xl text-emerald-400'}`}>{displayScore}</span>
+        </div>
+      );
+    }
+
+    function LeaderboardScreen({ scores, isLoading, lastSavedEmpId, onBack, isVisible }) {
+      const [searchQuery, setSearchQuery] = useState('');
+
+      const filteredScores = scores.filter(entry => 
+        (entry.name || '').toLowerCase().includes(searchQuery.toLowerCase()) || 
+        (entry.id || '').toLowerCase().includes(searchQuery.toLowerCase()) || 
+        (entry.score || 0).toString().includes(searchQuery)
+      );
+
+      const displayScores = filteredScores.slice(0, 50);
+
+      const currentUserRecord = lastSavedEmpId ? scores.find(s => String(s.id).trim() === String(lastSavedEmpId).trim()) : null;
+      const currentUserRank = currentUserRecord ? scores.findIndex(s => s.id === currentUserRecord.id) + 1 : 0;
+      const isCurrentUserVisible = currentUserRecord ? displayScores.some(s => s.id === currentUserRecord.id) : false;
+      
+      return (
+        <div className={`relative z-10 w-full max-w-lg p-4 sm:p-6 transition-all duration-700 transform flex flex-col h-[100dvh] justify-center ${isVisible ? 'translate-y-0 opacity-100 scale-100' : 'translate-y-12 opacity-0 scale-95'}`}>
+          
+          <div className={`relative overflow-hidden rounded-3xl border border-white/20 flex flex-col shadow-xl max-h-[90dvh] bg-black/80`} style={{ backfaceVisibility: 'hidden' }}>
+            
+            <div className="p-6 pb-4 border-b border-white/10 shrink-0">
+              <div className="flex items-center justify-center gap-3 mb-6">
+                <IconTrophy className="w-8 h-8 text-yellow-400" />
+                <h2 className="text-3xl font-black text-white uppercase tracking-wider">Top Técnicos</h2>
+              </div>
+              <div className="relative w-full">
+                <IconSearch className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-neutral-500" />
+                <input type="text" placeholder="Buscar técnico o ID..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full bg-black/60 border border-white/20 rounded-xl py-3 pl-12 pr-4 text-white font-mono placeholder-neutral-500 focus:outline-none focus:border-plexus-500 transition-colors" />
+              </div>
+            </div>
+            
+            <div className="flex-1 overflow-y-auto custom-scrollbar p-6 pt-2">
+              <div className="flex flex-col gap-3">
+                {isLoading ? (
+                  Array.from({ length: 5 }).map((_, i) => (
+                    <div key={i} className="flex justify-between items-center bg-white/5 rounded-lg p-4 border border-white/5 animate-pulse">
+                      <div className="flex gap-4 items-center"><div className="w-6 h-6 bg-white/10 rounded"></div><div className="w-32 sm:w-48 h-5 bg-white/10 rounded"></div></div>
+                      <div className="w-16 h-6 bg-white/10 rounded"></div>
+                    </div>
+                  ))
+                ) : displayScores.length === 0 ? (
+                  <div className="text-center py-10 px-4 border border-dashed border-neutral-600 rounded-xl bg-black/40 mt-4">
+                     <IconCpu className="w-10 h-10 text-neutral-500 mx-auto mb-4 opacity-50" />
+                     <p className="text-neutral-400 font-mono text-xs uppercase tracking-widest leading-relaxed">{searchQuery ? 'No se encontraron resultados.' : 'Sistema sin registros.'}</p>
+                  </div>
+                ) : (
+                  displayScores.map((entry, index) => {
+                    const officialRank = scores.findIndex(s => s.id === entry.id) + 1;
+                    const isHighlight = lastSavedEmpId && String(entry.id).trim() === String(lastSavedEmpId).trim();
+                    const staggeredDelay = Math.min(index * 40, 500); 
+                    return <LeaderboardRow key={entry.id || index} entry={entry} rank={officialRank} isHighlight={isHighlight} delay={staggeredDelay} />;
+                  })
+                )}
+              </div>
+            </div>
+
+            {currentUserRecord && !isCurrentUserVisible && !isLoading && (
+              <div className="px-6 py-4 bg-emerald-950/90 border-t border-emerald-500/40 shrink-0 flex items-center justify-between animate-[slide-up-fade_0.4s_ease-out]">
+                <div className="flex items-center gap-3"><div className="bg-emerald-500 text-black text-xs font-black px-2 py-1 rounded">TU RANGO: #{currentUserRank}</div><span className="font-mono font-bold text-white text-sm truncate max-w-[150px]">{currentUserRecord.name}</span></div>
+                <div className="flex items-center gap-2"><span className="font-mono text-xs text-neutral-400">Puntaje:</span><span className="font-mono font-black text-emerald-400 text-lg">{currentUserRecord.score}</span></div>
+              </div>
+            )}
+
+            <div className={`p-6 pt-4 border-t border-white/10 shrink-0 bg-black/60`}>
+              <button onPointerDown={(e) => { e.preventDefault(); if (isVisible) onBack(); }} className="w-full py-4 rounded-xl font-bold text-lg uppercase active:scale-95 hover:scale-[1.02] transition-all duration-300 text-neutral-200 border border-white/20 bg-black/80 hover:bg-black/60">Volver al Inicio</button>
+            </div>
+            
+          </div>
+        </div>
+      );
+    }
+
+    ReactDOM.render(<App />, document.getElementById('root'));
+  
